@@ -6,7 +6,8 @@
 
 设计理念对标 [企查查智能体数据平台](https://agent.qcc.com/data)（Agent-Native）：六大域分层、反幻觉元数据、开箱即用的一键扫描工具。
 
-> **需要 API Key？** 本仓库不含任何凭证。入站 token 与网关 AppCode 由管理员统一发放，联系开通：**[https://github.com/xrzlizheng](https://github.com/xrzlizheng)**。详见 [网关开通与联系](#网关开通与联系)。
+> **需要 API Key？** 本仓库不含任何凭证。入站 token 与网关 AppCode 由管理员统一发放，
+> 联系开通：**[https://github.com/xrzlizheng](https://github.com/xrzlizheng)**。详见 [网关开通与联系](#网关开通与联系)。
 
 ---
 
