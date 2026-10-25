@@ -1,0 +1,61 @@
+services:
+  keeprisk-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    ports:
+      - "8080:8080"
+    volumes:
+      # 目录挂载：规避单文件 bind-mount 在 go build rename（新 inode）后
+      # 容器仍绑定旧 inode、导致热更新静默失效的问题。
+      # main.go 热更新优先探测 /app/bin/keeprisk-mcp。
+      - ./build:/app/bin:ro
+      # 授权映射文件（热更新源，gitignore 忽略）：宿主改 config/auth_map.json 后
+      # docker kill --signal=HUP 即生效（进程内原子换表、会话不断），无需重建容器
+      - ./config:/app/config:ro
+    # 以宿主 uid:gid 运行，便于热编辑 600 权限的 config/auth_map.json
+    # （镜像默认 nonroot 读不了宿主用户的密钥文件）；
+    # UID/GID 默认不导出，用法：UID=$(id -u) GID=$(id -g) docker compose up
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      KEEPRISK_API_BASE: "https://api.keeprisk.com:9080"
+      KEEPRISK_REQUIRE_TLS: "true"
+      # pcode 级网关路由：部分接口部署在独立环境/专用账户（政策 V2 的
+      # E_007_1441/E_007_1451 在独立测试网关 + 专用 AppCode，与主网关不同）。
+      # 格式 {"<pcode>":{"base_url":"https://…","app_code":"…"}}；未配置=全部走主网关。
+      # 变更后需重建容器生效（SIGHUP 热更新继承启动时 env，不会刷新此映射）
+      KEEPRISK_API_ROUTES: "${KEEPRISK_API_ROUTES:-}"
+      # 入站鉴权映射组:Authorization token → AppCode
+      # 支持两种格式:JSON 对象 '{"kpm_x":"AppCodeA",...}' 或简写 "kpm_x:AppCodeA,kpm_y:AppCodeB"
+      # 文件热更模式:配置 KEEPRISK_AUTH_MAP_FILE 后以文件为唯一来源(启动缺失/非法 fail-fast、
+      # SIGHUP 进程内原子换表,授权增删无需重建容器);本 env 仅在文件未配置时兜底,
+      # 此时修改仍需重建容器(SIGHUP 热更新继承启动时 env,不会刷新 env 本身)
+      KEEPRISK_AUTH_MAP: "${KEEPRISK_AUTH_MAP:-}"
+      KEEPRISK_AUTH_MAP_FILE: "/app/config/auth_map.json"
+      MCP_HTTP_ADDR: ":8080"
+      MCP_HTTP_PATH: "/mcp"
+      # 审计日志：写到 stdout 便于 ELK 采集（容器 stderr/stdout 通常被统一采集）
+      KEEPRISK_AUDIT_PATH: "-"
+      # 网关层逐接口（pcode）审计：每个 pcode 一条 method=gateway 记录，
+      # 用于按接口粒度归因成本（计费定价）；false 关闭明细，工具层 gateway_calls 汇总仍在
+      KEEPRISK_AUDIT_PER_PCODE: "true"
+      # 缓存（秒；0 关闭）。缓存默认按 AppCode 隔离（防伪造 AppCode 跨租户读旁路）
+      KEEPRISK_CACHE_TTL_SEC: "300"
+      KEEPRISK_CACHE_MAX: "1000"
+      KEEPRISK_CACHE_PER_APPCODE: "true"
+      # 配额与限流
+      KEEPRISK_QUOTA_DAILY: "5000"
+      KEEPRISK_RATE_PER_SEC: "50"
+      KEEPRISK_CONCURRENT_PER_APP: "10"
+      # 网关调用并发
+      KEEPRISK_MAX_INFLIGHT: "200"
+      KEEPRISK_HTTP_TIMEOUT: "60s"
+    restart: unless-stopped
+    # 注意：distroless 镜像无 shell/wget，healthcheck 需用外部探针或自定义镜像
+    # 生产环境建议用 K8s httpGet 探针替代，本地 docker 可注释掉或用带 wget 的 sidecar
+    # healthcheck:
+    #   test: ["CMD", "wget", "-qO-", "http://localhost:8080/ready"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 10s

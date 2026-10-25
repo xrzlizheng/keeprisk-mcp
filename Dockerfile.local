@@ -1,0 +1,10 @@
+# 临时构建文件：使用本机预编译二进制 + 本地 distroless 镜像
+# 仅用于本机部署，避免拉取 golang docker 镜像（gcr.io 不可达 + mirror 慢）
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /
+COPY build/keeprisk-mcp /keeprisk-mcp
+ENV MCP_HTTP_ADDR=:8080
+ENV MCP_HTTP_PATH=/mcp
+EXPOSE 8080
+USER nonroot:nonroot
+ENTRYPOINT ["/keeprisk-mcp"]

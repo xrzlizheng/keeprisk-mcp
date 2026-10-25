@@ -1,0 +1,20 @@
+*.exe
+.idea/
+.vscode/
+.evolve/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+graphify-out/
+
+# 授权映射真实文件（含凭证，勿提交仓库）；仅保留 example 模板
+config/auth_map.json
+!config/auth_map.example.json
+
+# 构建产物与本地日志
+build/
+logs/
+*.out
+.DS_Store

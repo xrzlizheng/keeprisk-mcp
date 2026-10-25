@@ -1,0 +1,29 @@
+# KeepRisk Go MCP — 评测用镜像（带 shell + wget，便于调试和 healthcheck）
+# 与生产 Dockerfile 区别：运行时用 debian:bookworm-slim 而非 distroless
+# 详见 docs/linux_optimization_plan.md §5.6（Q-L02）
+#
+# 构建前确保 catalog 已同步：bash scripts/sync_catalog.sh
+# （catalog 通过 go:embed 编译期嵌入，构建时从 internal/catalog/data/ 读取）
+
+FROM golang:1.23-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /keeprisk-mcp ./cmd/keeprisk-mcp
+
+# 评测用：bookworm-slim（带 shell + wget，支持 healthcheck 和 exec 调试）
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /
+COPY --from=build /keeprisk-mcp /keeprisk-mcp
+ENV MCP_HTTP_ADDR=:8080
+ENV MCP_HTTP_PATH=/mcp
+EXPOSE 8080
+# /ready 端点：catalog 已加载、客户端已初始化时返回 200，否则 503
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=10 \
+  CMD wget -qO- http://localhost:8080/ready || exit 1
+ENTRYPOINT ["/keeprisk-mcp"]
